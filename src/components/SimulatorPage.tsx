@@ -68,25 +68,32 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
   // Locate Feature (Uses true browser live location coordinates)
   const handleLocateMe = () => {
     setLocateStatus('Locating...')
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude
-          const lon = pos.coords.longitude
-          // Fly directly to user's real live location!
-          setFlyToTarget({ lat, lon, height: 1600 })
-          setLocateStatus('Live GPS Locked')
-          setTimeout(() => setLocateStatus(null), 3500)
-        },
-        (err) => {
-          // If user denies permission or browser fails, center smoothly on Bengaluru city core
-          setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
-          setLocateStatus('Centered on City')
-          setTimeout(() => setLocateStatus(null), 3000)
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      )
-    } else {
+    try {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const lat = pos.coords.latitude
+            const lon = pos.coords.longitude
+            // Fly directly to user's real live location!
+            setFlyToTarget({ lat, lon, height: 1600 })
+            setLocateStatus('Live GPS Locked')
+            setTimeout(() => setLocateStatus(null), 3500)
+          },
+          (err) => {
+            // If user denies permission, policy blocks, or browser fails, center smoothly on Bengaluru city core
+            console.warn('Geolocation unavailable, falling back to Bengaluru Core:', err?.message)
+            setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
+            setLocateStatus('Centered on City')
+            setTimeout(() => setLocateStatus(null), 3000)
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        )
+      } else {
+        setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
+        setLocateStatus('Bengaluru Core')
+        setTimeout(() => setLocateStatus(null), 2500)
+      }
+    } catch (e) {
       setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
       setLocateStatus('Bengaluru Core')
       setTimeout(() => setLocateStatus(null), 2500)
