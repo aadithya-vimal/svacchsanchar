@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
 import {
   BarChart3, Clock3, Route, AlertTriangle, TrendingDown, Fuel, Leaf,
-  IndianRupee, ShieldCheck, ArrowUpRight, Filter, Download, Zap, Building2
+  IndianRupee, ShieldCheck, ArrowUpRight, Filter, Download, Zap, Building2,
+  Play, Pause, RotateCcw
 } from 'lucide-react'
 import { useTwin } from '../store/twin'
+import { SpeedSelect } from './SpeedSelect'
 import { BENGALURU_WARDS } from '../data/bengaluruRoads'
 
 export function AnalyticsPage({ go }: { go?: (p: string) => void }) {
@@ -11,6 +12,11 @@ export function AnalyticsPage({ go }: { go?: (p: string) => void }) {
   const trucks = useTwin(s => s.trucks)
   const fill = useTwin(s => s.fill)
   const time = useTwin(s => s.time)
+  const playing = useTwin(s => s.playing)
+  const togglePlaying = useTwin(s => s.togglePlaying)
+  const speed = useTwin(s => s.speed)
+  const setSpeed = useTwin(s => s.setSpeed)
+  const reset = useTwin(s => s.reset)
   const [selectedZone, setSelectedZone] = useState<string>('All')
 
   const savingKm = Math.max(0, m.fixedKm - m.optimizedKm)
@@ -63,10 +69,27 @@ export function AnalyticsPage({ go }: { go?: (p: string) => void }) {
           <p>Real-time comparative performance: SvacchSanchar AI Dynamic Dispatch vs Traditional Fixed Schedules.</p>
         </div>
         <div className="header-actions">
+          {/* Live Simulation Engine Bar */}
           <div className="live-clock-badge glass">
             <span className="live-dot" />
-            <span>Telemetry Clock: <b>{timeStr} IST</b></span>
+            <span><b>{timeStr} IST</b></span>
           </div>
+
+          <button
+            className={`primary-btn ${playing ? 'active-run-btn' : 'glow-btn'}`}
+            onClick={togglePlaying}
+            title={playing ? 'Pause Simulation Engine' : 'Start Simulation Engine'}
+          >
+            {playing ? <Pause size={14} /> : <Play size={14} />}
+            <span>{playing ? 'Pause' : 'Play'}</span>
+          </button>
+
+          <SpeedSelect currentSpeed={speed} onSelectSpeed={setSpeed} />
+
+          <button className="secondary-btn glass reset-btn" onClick={reset} title="Reset Simulation">
+            <RotateCcw size={14} />
+          </button>
+
           {go && (
             <button className="primary-btn glow-btn" onClick={() => go('/simulator')}>
               Return to Twin <Zap size={14} />

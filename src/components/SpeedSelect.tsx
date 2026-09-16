@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Zap, ChevronDown, Check } from 'lucide-react'
 
 interface SpeedSelectProps {
-  speed: number
-  onChange: (speed: number) => void
+  currentSpeed?: number
+  speed?: number
+  onSelectSpeed?: (speed: number) => void
+  onChange?: (speed: number) => void
 }
 
 const speedOptions = [
-  { value: 0.5, label: '0.5×', desc: 'Slow' },
+  { value: 0.5, label: '0.5×', desc: 'Slow motion' },
   { value: 1, label: '1×', desc: 'Realtime' },
   { value: 2, label: '2×', desc: 'Accelerated' },
   { value: 5, label: '5×', desc: 'Fast' },
@@ -16,7 +18,10 @@ const speedOptions = [
   { value: 50, label: '50×', desc: 'Stress Test' },
 ]
 
-export function SpeedSelect({ speed, onChange }: SpeedSelectProps) {
+export function SpeedSelect({ currentSpeed, speed, onSelectSpeed, onChange }: SpeedSelectProps) {
+  const currentVal = currentSpeed ?? speed ?? 10
+  const handleChange = onSelectSpeed ?? onChange ?? (() => {})
+
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -39,7 +44,7 @@ export function SpeedSelect({ speed, onChange }: SpeedSelectProps) {
         title="Simulation Speed Multiplier"
       >
         <Zap size={13} className="speed-icon" />
-        <span className="speed-val">{speed}×</span>
+        <span className="speed-val">{currentVal}×</span>
         <ChevronDown size={13} className={`speed-chevron ${open ? 'rotated' : ''}`} />
       </button>
 
@@ -50,15 +55,15 @@ export function SpeedSelect({ speed, onChange }: SpeedSelectProps) {
             <button
               key={opt.value}
               type="button"
-              className={`speed-option ${speed === opt.value ? 'selected' : ''}`}
+              className={`speed-option ${currentVal === opt.value ? 'selected' : ''}`}
               onClick={() => {
-                onChange(opt.value)
+                handleChange(opt.value)
                 setOpen(false)
               }}
             >
               <span className="speed-opt-label">{opt.label}</span>
               <span className="speed-opt-desc">{opt.desc}</span>
-              {speed === opt.value && <Check size={14} className="speed-opt-check" />}
+              {currentVal === opt.value && <Check size={14} className="speed-opt-check" />}
             </button>
           ))}
         </div>

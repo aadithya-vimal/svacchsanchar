@@ -3,7 +3,7 @@ import {
   Activity, AlertTriangle, ArrowLeft, Clock3, Eye, Flame, Layers3, Map,
   Pause, Play, RotateCcw, Settings, SlidersHorizontal, Truck, Zap,
   Navigation, Crosshair, Fuel, Leaf, ChevronDown, ChevronUp, Terminal,
-  Radio, CheckCircle2
+  Radio, CheckCircle2, X, Info
 } from 'lucide-react'
 import { useTwin } from '../store/twin'
 import { useProviders } from '../store/providers'
@@ -65,7 +65,7 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
     s.selectTruck(id)
   }
 
-  // Locate Feature (Browser Geolocation or Bengaluru Center)
+  // Locate Feature (Uses true browser live location coordinates)
   const handleLocateMe = () => {
     setLocateStatus('Locating...')
     if ('geolocation' in navigator) {
@@ -73,28 +73,22 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
         (pos) => {
           const lat = pos.coords.latitude
           const lon = pos.coords.longitude
-          // Check if user is within Karnataka / South India bounds
-          if (lat >= 11.0 && lat <= 15.0 && lon >= 75.0 && lon <= 80.0) {
-            setFlyToTarget({ lat, lon, height: 1800 })
-            setLocateStatus('Located!')
-          } else {
-            // Center on Bengaluru BBMP Headquarters
-            setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
-            setLocateStatus('Centered on Bengaluru')
-          }
+          // Fly directly to user's real live location!
+          setFlyToTarget({ lat, lon, height: 1600 })
+          setLocateStatus('Live GPS Locked')
+          setTimeout(() => setLocateStatus(null), 3500)
+        },
+        (err) => {
+          // If user denies permission or browser fails, center smoothly on Bengaluru city core
+          setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
+          setLocateStatus('Centered on City')
           setTimeout(() => setLocateStatus(null), 3000)
         },
-        () => {
-          // Permission denied or error; center on Bengaluru Central
-          setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2800 })
-          setLocateStatus('Centered on Central Hub')
-          setTimeout(() => setLocateStatus(null), 3000)
-        },
-        { timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       )
     } else {
-      setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2800 })
-      setLocateStatus('Centered')
+      setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
+      setLocateStatus('Bengaluru Core')
       setTimeout(() => setLocateStatus(null), 2500)
     }
   }
@@ -155,10 +149,10 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
         <button
           className="locate-btn glass"
           onClick={handleLocateMe}
-          title="Locate Current Position or Center on Central Hub"
+          title="Fly to your live real-time GPS location"
         >
           <Crosshair size={15} className="text-cyan" />
-          <span className="hide-on-mobile">{locateStatus || 'Locate'}</span>
+          <span className="hide-on-mobile">{locateStatus || 'Live Location'}</span>
         </button>
 
         {/* Live Simulation Clock & Speed Badge */}
@@ -205,6 +199,37 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
         </button>
       </div>
 
+      {/* Prominent Active Scenario Disruption Banner with Direct Exit Controls */}
+      {s.events.length > 0 && (
+        <div className="active-scenario-banner glass">
+          <div className="banner-left">
+            <Flame size={16} className="text-coral" />
+            <div className="banner-text">
+              <b>STRESS SCENARIO ACTIVE: {s.events[0].title}</b>
+              <span>
+                {Math.round(s.events[0].intensity * 100)}% severity · {s.events.length} disruption{s.events.length > 1 ? 's' : ''} active
+              </span>
+            </div>
+          </div>
+          <div className="banner-actions">
+            <button
+              className="exit-scenario-btn"
+              onClick={() => s.removeScenario(s.events[0].id)}
+              title="Exit this disruption scenario"
+            >
+              <X size={14} /> Exit Scenario
+            </button>
+            <button
+              className="manage-scenario-btn"
+              onClick={() => go('/scenarios')}
+              title="Open Scenario Lab"
+            >
+              Stress Lab →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main HUD Overlay Container (Zero Overlapping Cards) */}
       <div className="sim-hud-container">
         {/* Left Column: Cockpit Controls & Quick Corridor Navigator */}
@@ -237,6 +262,7 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
               <button onClick={() => setFlyToTarget({ lat: 12.9165, lon: 77.6515, height: 1600 })}>HSR</button>
             </div>
           </div>
+
 
           {/* Basemap Switcher Card */}
           <div className="glass map-switcher-card">

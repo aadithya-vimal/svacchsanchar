@@ -108,7 +108,7 @@ interface State {
   togglePlaying: () => void
   setPlaying: (p: boolean) => void
   setSpeed: (n: number) => void
-  step: (hours: number) => Promise<void>
+  step: (hours: number) => void
   seekTime: (targetTime: number) => void
   rewind: (hours: number) => void
   reset: () => void
@@ -146,7 +146,7 @@ export const useTwin = create<State>((set, get) => ({
   setPlaying: (playing) => set({ playing }),
   setSpeed: (speed) => set({ speed }),
 
-  step: async (hours: number) => {
+  step: (hours: number) => {
     const s = get()
     const fill = s.fill.slice()
     const time = s.time + hours * 3600000
@@ -173,20 +173,20 @@ export const useTwin = create<State>((set, get) => ({
       }
     }
 
-    // Async prefetch OSRM routes for trucks that need new road paths
-    // This runs in background — next tick will use the cached routes
-    prefetchTruckRoutes(moved).then(withRoutes => {
-      // Merge the fetched routes back into current state without overwriting other changes
-      set(s2 => ({
-        trucks: s2.trucks.map((t, i) => {
-          const fetched = withRoutes[i]
-          if (fetched && fetched.roadPath && fetched.roadPath.length > 0 && (!t.roadPath || t.roadPath.length === 0)) {
-            return { ...t, roadPath: fetched.roadPath, pathIndex: 0 }
-          }
-          return t
-        })
-      }))
-    }).catch(() => {})
+    // Async prefetch OSRM routes in background without blocking state updates
+    try {
+      prefetchTruckRoutes(moved).then(withRoutes => {
+        set(s2 => ({
+          trucks: s2.trucks.map((t, i) => {
+            const fetched = withRoutes[i]
+            if (fetched && fetched.roadPath && fetched.roadPath.length > 0 && (!t.roadPath || t.roadPath.length === 0)) {
+              return { ...t, roadPath: fetched.roadPath, pathIndex: 0 }
+            }
+            return t
+          })
+        }))
+      }).catch(() => {})
+    } catch {}
 
     const metrics = calc(fill, moved, plans)
     const historyItem = {
@@ -205,47 +205,53 @@ export const useTwin = create<State>((set, get) => ({
       trucks: moved,
       metrics,
       auditLogs: mergedLogs,
-      history: [...s.history, historyItem].slice(-24)
+      history: [...s.history, historyItem].slice(-48)
     })
   },
-
 
   seekTime: (targetTime: number) => {
     const s = get()
     const deltaHours = (targetTime - s.time) / 3600000
-    if (Math.abs(deltaHours) < 0.01) return
+    if (Math.abs(deltaHours) < 0.005) return
 
-    // If historical state exists, interpolate from history
-    const cand = s.history.filter(h => h.t <= targetTime).at(-1)
-    if (cand && deltaHours < 0) {
-      const fill = cand.fill.slice()
-      const trucks = cand.trucks.map(t => ({ ...t, route: [...t.route] }))
-      set({
-        time: targetTime,
-        fill,
-        trucks,
-        metrics: calc(fill, trucks)
-      })
-    } else {
-      // Advance or step to target time
-      s.step(Math.max(-2, Math.min(2, deltaHours)))
+    // If historical state exists and we are seeking backwards, restore closest recorded state
+    if (deltaHours < 0) {
+      const cand = s.history.filter(h => h.t <= targetTime).at(-1)
+      if (cand) {
+        const fill = cand.fill.slice()
+        const trucks = cand.trucks.map(t => ({ ...t, route: [...t.route] }))
+        set({
+          time: targetTime,
+          fill,
+          trucks,
+          metrics: calc(fill, trucks)
+        })
+        return
+      }
     }
+
+    // Otherwise advance simulation to target time directly
+    const clampedHours = Math.max(-12, Math.min(12, deltaHours))
+    s.step(clampedHours)
   },
 
   rewind: (hours) => {
     const s = get()
     const target = s.time - hours * 3600000
-    const cand = s.history.filter(h => h.t <= target).at(-1) || s.history[0]
-    if (!cand) return
-    const fill = cand.fill.slice()
-    const trucks = cand.trucks.map(t => ({ ...t, route: [...t.route] }))
-    set({
-      time: cand.t,
-      fill,
-      trucks,
-      metrics: calc(fill, trucks),
-      history: s.history.filter(h => h.t <= cand.t)
-    })
+    const cand = s.history.filter(h => h.t <= target).at(-1)
+    if (cand) {
+      const fill = cand.fill.slice()
+      const trucks = cand.trucks.map(t => ({ ...t, route: [...t.route] }))
+      set({
+        time: cand.t,
+        fill,
+        trucks,
+        metrics: calc(fill, trucks),
+        history: s.history.filter(h => h.t <= cand.t)
+      })
+    } else {
+      s.step(-hours)
+    }
   },
 
   reset: () => {

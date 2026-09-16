@@ -123,12 +123,15 @@ h1, h2, h3 { font-family: Manrope, Inter, system-ui, sans-serif; letter-spacing:
    LANDING PAGE
    ========================================================================== */
 .landing {
+  height: 100%;
   min-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
   background: radial-gradient(circle at 84% 32%, rgba(16, 185, 129, 0.12), transparent 30%),
               radial-gradient(circle at 74% 18%, rgba(6, 182, 212, 0.14), transparent 25%),
               radial-gradient(circle at 20% 80%, rgba(99, 102, 241, 0.09), transparent 35%),
               var(--bg);
-  overflow: auto;
 }
 .landing-nav {
   height: 76px;
@@ -1662,4 +1665,104 @@ h1, h2, h3 { font-family: Manrope, Inter, system-ui, sans-serif; letter-spacing:
   .lab-page .page-title h1 { font-size: 32px; }
   .fleet-summary { grid-template-columns: 1fr 1fr; }
 }
+
+/* ==========================================================================
+   ACTIVE SCENARIO BANNER (PROMINENT OVERLAY)
+   ========================================================================== */
+.active-scenario-banner {
+  position: absolute;
+  top: 86px;
+  left: 20px;
+  right: 20px;
+  max-width: 720px;
+  margin: 0 auto;
+  z-index: 34;
+  border-radius: 14px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  background: rgba(15, 18, 26, 0.92);
+  box-shadow: 0 8px 30px rgba(244, 63, 94, 0.2);
+}
+.banner-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.banner-text b {
+  display: block;
+  font-size: 12px;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.banner-text span {
+  display: block;
+  font-size: 10px;
+  color: var(--coral);
+  margin-top: 1px;
+}
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.exit-scenario-btn {
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.15);
+  color: #fecdd3;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.exit-scenario-btn:hover {
+  background: var(--coral);
+  color: #fff;
+}
+.manage-scenario-btn {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.manage-scenario-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Page Title with Flex controls */
+.page-title--flex {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.fleet-live-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 14px;
+}
+.reset-btn {
+  padding: 8px 10px;
+}
+.map-view-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
 

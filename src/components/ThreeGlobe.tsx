@@ -83,39 +83,36 @@ export function ThreeGlobe({ className }: ThreeGlobeProps) {
     const atmoMesh = new THREE.Mesh(atmoGeo, atmoMat)
     globeGroup.add(atmoMesh)
 
-    // Bengaluru Location Marker (Lat: 12.9716, Lon: 77.5946)
-    // For equirectangular map: X is along equator, texture left edge = -180°
-    // Correct spherical coords: phi (polar) from +Y axis, theta around Y axis
+    // Bengaluru Location Marker (Lat: 12.9716°N, Lon: 77.5946°E)
+    const targetLon = 77.5946 * (Math.PI / 180)
     const markerLat = 12.9716 * (Math.PI / 180)
-    const markerLonDeg = 77.5946  // East longitude
-    // Spherical: x = r*cos(lat)*sin(lon), y = r*sin(lat), z = r*cos(lat)*cos(lon)
-    // With three.js Y-up and texture lon=0 at +Z axis:
-    const markerLonRad = markerLonDeg * (Math.PI / 180)
+    // On the textured Earth sphere, Bengaluru position:
     const markerPos = new THREE.Vector3(
-      (radius * 1.015) * Math.cos(markerLat) * Math.sin(markerLonRad),
+      -(radius * 1.015) * Math.cos(markerLat) * Math.sin(targetLon),
       (radius * 1.015) * Math.sin(markerLat),
-      (radius * 1.015) * Math.cos(markerLat) * Math.cos(markerLonRad)
+      (radius * 1.015) * Math.cos(markerLat) * Math.cos(targetLon)
     )
 
     // Pinpoint core
-    const pinGeo = new THREE.SphereGeometry(0.022, 16, 16)
+    const pinGeo = new THREE.SphereGeometry(0.024, 16, 16)
     const pinMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe })
     const pinMesh = new THREE.Mesh(pinGeo, pinMat)
     pinMesh.position.copy(markerPos)
     globeGroup.add(pinMesh)
 
     // Pulsing Ring
-    const ringGeo = new THREE.RingGeometry(0.03, 0.048, 32)
+    const ringGeo = new THREE.RingGeometry(0.032, 0.052, 32)
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0x10b981,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.9
+      opacity: 0.95
     })
     const ringMesh = new THREE.Mesh(ringGeo, ringMat)
     ringMesh.position.copy(markerPos)
-    ringMesh.lookAt(new THREE.Vector3(0, 0, 0))
+    ringMesh.lookAt(markerPos.clone().multiplyScalar(2))
     globeGroup.add(ringMesh)
+
 
     // Orbital Ring
     const orbitRadius = 1.35
@@ -154,20 +151,16 @@ export function ThreeGlobe({ className }: ThreeGlobeProps) {
     globeGroup.add(particles)
 
     // Initial globe orientation: rotate so India/Bengaluru faces the viewer
-    // Bengaluru is at ~77.6°E longitude. With SphereGeometry default UV mapping,
-    // lon=0 (prime meridian) maps to +Z. Rotate Y by -77.6° to bring India to front.
-    // Then apply slight tilt to show Indian subcontinent beautifully
-    const indiaRotY = -(77.5946 * Math.PI / 180)
+    const indiaRotY = Math.PI - targetLon
     globeGroup.rotation.y = indiaRotY
-    globeGroup.rotation.x = 0.18  // Slight northward tilt
+    globeGroup.rotation.x = 0.22  // Natural axial tilt
 
 
     let isDragging = false
     let prevMouseX = 0
     let prevMouseY = 0
     let targetRotationY = indiaRotY
-    let targetRotationX = 0.18
-
+    let targetRotationX = 0.22
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true
@@ -190,7 +183,7 @@ export function ThreeGlobe({ className }: ThreeGlobeProps) {
       isDragging = false
     }
 
-    // Touch controls for mobile
+    // Touch controls for mobile with pinch/scroll preservation
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 1) {
         isDragging = true
@@ -212,6 +205,7 @@ export function ThreeGlobe({ className }: ThreeGlobeProps) {
 
     const domEl = renderer.domElement
     domEl.style.cursor = 'grab'
+    domEl.style.touchAction = 'pan-y' // Allow page scrolling on touch devices!
     domEl.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)

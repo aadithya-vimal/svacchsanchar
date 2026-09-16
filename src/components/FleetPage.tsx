@@ -1,6 +1,7 @@
 import React from 'react'
-import { Truck, Navigation, AlertOctagon, Wrench, CheckCircle2, Clock, Package } from 'lucide-react'
+import { Truck, Navigation, AlertOctagon, Wrench, CheckCircle2, Clock, Package, Play, Pause, RotateCcw, Activity } from 'lucide-react'
 import { useTwin } from '../store/twin'
+import { SpeedSelect } from './SpeedSelect'
 
 const STATUS_COLOR: Record<string, string> = {
   active: '#10b981',
@@ -16,23 +17,58 @@ const STATUS_LABEL: Record<string, string> = {
   breakdown: 'Breakdown'
 }
 
-export function FleetPage() {
-  const { trucks, markTruckBroken, repairTruck, selectTruck } = useTwin()
+export function FleetPage({ go }: { go?: (p: string) => void }) {
+  const { trucks, markTruckBroken, repairTruck, selectTruck, playing, togglePlaying, speed, setSpeed, time, reset } = useTwin()
 
   const active = trucks.filter(t => t.status === 'active').length
   const idle = trucks.filter(t => t.status === 'idle').length
   const returning = trucks.filter(t => t.status === 'returning').length
   const breakdown = trucks.filter(t => t.status === 'breakdown').length
 
+  const timeStr = new Date(time).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+
   return (
     <div className="fleet-page">
-      <div className="page-title">
+      <div className="page-title page-title--flex">
         <div>
-          <div className="eyebrow darktext">FLEET COMMAND</div>
+          <div className="eyebrow cyber-tag">FLEET COMMAND · LIVE TELEMETRY</div>
           <h1>Every vehicle, accounted for.</h1>
           <p>
             {active} truck{active !== 1 ? 's are' : ' is'} actively collecting waste across Bengaluru right now.
           </p>
+        </div>
+
+        {/* Live Simulation Engine Bar */}
+        <div className="fleet-live-controls glass">
+          <div className="live-clock-badge">
+            <span className="live-dot" />
+            <b>{timeStr} IST</b>
+          </div>
+
+          <button
+            className={`primary-btn ${playing ? 'active-run-btn' : 'glow-btn'}`}
+            onClick={togglePlaying}
+            title={playing ? 'Pause Simulation Engine' : 'Start Simulation Engine'}
+          >
+            {playing ? <Pause size={14} /> : <Play size={14} />}
+            <span>{playing ? 'Pause' : 'Play'}</span>
+          </button>
+
+          <SpeedSelect currentSpeed={speed} onSelectSpeed={setSpeed} />
+
+          <button className="secondary-btn glass reset-btn" onClick={reset} title="Reset Simulation">
+            <RotateCcw size={14} />
+          </button>
+
+          {go && (
+            <button className="primary-btn map-view-btn" onClick={() => go('/simulator')}>
+              <Activity size={14} /> View on Map
+            </button>
+          )}
         </div>
       </div>
 
@@ -85,7 +121,13 @@ export function FleetPage() {
                   </span>
                 </div>
                 <div className="truck-actions">
-                  <button onClick={() => selectTruck(t.id)} title="Track on map">
+                  <button
+                    onClick={() => {
+                      selectTruck(t.id)
+                      if (go) go('/simulator')
+                    }}
+                    title="Track vehicle on map"
+                  >
                     <Navigation size={14} />
                   </button>
                   {t.status === 'breakdown' ? (
@@ -111,7 +153,7 @@ export function FleetPage() {
 
               <div className="truck-meta">
                 <span>{Math.round(t.loadKg)} / {t.capacityKg} kg</span>
-                <span>{t.route.length > 0 ? `${t.route.length - t.routeIndex} stops` : 'No route'}</span>
+                <span>{t.route.length > 0 ? `${t.route.length - t.routeIndex} stops` : 'Idle'}</span>
               </div>
 
               {t.currentStreet && (
