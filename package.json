@@ -1,9 +1,28 @@
 {
-  "name":"svacchsanchar",
-  "private":true,
-  "version":"0.2.0",
-  "type":"module",
-  "scripts":{"dev":"vite","build":"vite build","preview":"vite preview","test":"vitest run"},
-  "dependencies":{"cesium":"^1.124.0","lucide-react":"^0.468.0","react":"^19.0.0","react-dom":"^19.0.0","zustand":"^5.0.0"},
-  "devDependencies":{"@vitejs/plugin-react":"^4.3.4","typescript":"^5.7.2","vite":"^6.0.0","vite-plugin-cesium":"^1.2.23","vitest":"^2.1.8"}
+  "name": "svacchsanchar",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@types/three": "^0.186.0",
+    "cesium": "^1.124.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "three": "^0.186.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "vite-plugin-cesium": "^1.2.23",
+    "vitest": "^2.1.8"
+  }
 }

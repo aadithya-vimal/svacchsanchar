@@ -1,29 +1,68 @@
-import {useEffect, useRef} from 'react'
+import React, { useEffect, useRef } from 'react'
 import * as Cesium from 'cesium'
-import type {MapStyle, Truck, ViewMode} from '../data/types'
-import {BIN_COUNT, binPosition} from '../data/model'
+import type { MapStyle, Truck, ViewMode, TruckStatus } from '../data/types'
+import { binPosition, BIN_COUNT, CITY, ALL_ROAD_BINS } from '../data/model'
 
-const dataUri=(s:string)=>`data:image/svg+xml;charset=utf-8,${encodeURIComponent(s)}`
-const svgTruck=(active=true)=>dataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="34" viewBox="0 0 64 34"><rect x="4" y="10" width="40" height="17" rx="3" fill="#111"/><path d="M44 14h9l7 7v6H44z" fill="#777"/><circle cx="15" cy="29" r="4" fill="#222"/><circle cx="49" cy="29" r="4" fill="#222"/><rect x="48" y="16" width="7" height="5" rx="1" fill="#dfe8ff"/><rect x="9" y="13" width="6" height="4" rx="1" fill="${active?'#59e391':'#888'}"/></svg>`)
-const svgBin=(level:number)=>{const c=level>=90?'#ff5f56':level>=70?'#ffb84d':'#62db96';return dataUri(`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="34" viewBox="0 0 30 34"><rect x="6" y="9" width="18" height="21" rx="3" fill="#f7f7f2"/><rect x="4" y="5" width="22" height="5" rx="2" fill="#bbb"/><rect x="9" y="13" width="12" height="12" rx="2" fill="${c}"/><path d="M9 28h12" stroke="#777" stroke-width="2"/></svg>`)}
+// Crisp vector SVG badges for 2D map view
+function svgTruck(status: TruckStatus, name: string): string {
+  const color = status === 'breakdown' ? '#ef4444' : status === 'returning' ? '#f59e0b' : '#10b981'
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="21" fill="#0f172a" stroke="${color}" stroke-width="3.5" opacity="0.95"/>
+      <circle cx="24" cy="24" r="16" fill="${color}" opacity="0.2"/>
+      <g transform="translate(13, 14)" fill="none" stroke="${color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 3h12v11H1z"/>
+        <path d="M13 7h4l3 3v4h-7z"/>
+        <circle cx="4" cy="15" r="2" fill="${color}"/>
+        <circle cx="16" cy="15" r="2" fill="${color}"/>
+      </g>
+    </svg>
+  `
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.trim())}`
+}
 
-function imagery(style:MapStyle, keys:{mapTiler:string;mapbox:string;stadia:string}) {
-  const common=(url:string,credit:string,max=20)=>new Cesium.UrlTemplateImageryProvider({url,credit,maximumLevel:max})
-  if(style==='satellite'){
-    if(keys.mapTiler)return common(`https://api.maptiler.com/maps/satellite-v2/{z}/{x}/{y}.jpg?key=${encodeURIComponent(keys.mapTiler)}`,'© MapTiler © OpenStreetMap',20)
-    if(keys.stadia)return common(`https://tiles.stadiamaps.com/tiles/alidade_satellite/{z}/{x}/{y}.jpg?api_key=${encodeURIComponent(keys.stadia)}`,'© Stadia Maps © OpenMapTiles © OpenStreetMap',20)
-    if(keys.mapbox)return common(`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{z}/{x}/{y}@2x?access_token=${encodeURIComponent(keys.mapbox)}`,'© Mapbox © OpenStreetMap',18)
-    return common('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','© Esri',18)
+function svgBin(fill: number): string {
+  const color = fill >= 85 ? '#ef4444' : fill >= 65 ? '#f59e0b' : '#10b981'
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+      <circle cx="18" cy="18" r="16" fill="#0b1329" stroke="${color}" stroke-width="2.8" opacity="0.94"/>
+      <circle cx="18" cy="18" r="11" fill="${color}" opacity="0.25"/>
+      <g transform="translate(10, 9)" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 4h12M5 4V2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M13 4v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4"/>
+        <line x1="6" y1="8" x2="6" y2="12"/>
+        <line x1="10" y1="8" x2="10" y2="12"/>
+      </g>
+    </svg>
+  `
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.trim())}`
+}
+
+function imagery(style: MapStyle, keys: any) {
+  const common = (url: string, credit: string, max = 20) =>
+    new Cesium.UrlTemplateImageryProvider({ url, credit, maximumLevel: max })
+
+  // OpenStreetMap is the primary default basemap for crisp road clarity
+  if (style === 'streets') {
+    return common(
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      '© OpenStreetMap contributors',
+      19
+    )
   }
-  if(style==='dark'){
-    if(keys.stadia)return common(`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=${encodeURIComponent(keys.stadia)}`,'© Stadia Maps © OpenMapTiles © OpenStreetMap',20)
-    return common('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','© CARTO © OpenStreetMap',19)
+  if (style === 'satellite') {
+    if (keys.mapTiler) return common(`https://api.maptiler.com/maps/hybrid/{z}/{x}/{y}.jpg?key=${encodeURIComponent(keys.mapTiler)}`, '© MapTiler © OpenStreetMap', 20)
+    if (keys.mapbox) return common(`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/256/{z}/{x}/{y}@2x?access_token=${encodeURIComponent(keys.mapbox)}`, '© Mapbox © OpenStreetMap', 18)
+    return common('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', '© Esri', 18)
   }
-  if(style==='light'){
-    if(keys.stadia)return common(`https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png?api_key=${encodeURIComponent(keys.stadia)}`,'© Stadia Maps © OpenMapTiles © OpenStreetMap',20)
-    return common('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png','© CARTO © OpenStreetMap',19)
+  if (style === 'dark') {
+    if (keys.stadia) return common(`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=${encodeURIComponent(keys.stadia)}`, '© Stadia Maps © OpenMapTiles © OpenStreetMap', 20)
+    return common('https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', '© CARTO © OpenStreetMap', 19)
   }
-  return common('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png','© OpenStreetMap contributors',19)
+  if (style === 'light') {
+    if (keys.stadia) return common(`https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png?api_key=${encodeURIComponent(keys.stadia)}`, '© Stadia Maps © OpenMapTiles © OpenStreetMap', 20)
+    return common('https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', '© CARTO © OpenStreetMap', 19)
+  }
+  return common('https://tile.openstreetmap.org/{z}/{x}/{y}.png', '© OpenStreetMap contributors', 19)
 }
 
 export function CesiumWorld({
@@ -57,19 +96,18 @@ export function CesiumWorld({
 }) {
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<Cesium.Viewer | null>(null)
-  const points = useRef<Cesium.PointPrimitiveCollection | null>(null)
-  const pointById = useRef<Cesium.PointPrimitive[]>([])
   const buildingRef = useRef<Cesium.Primitive | null>(null)
   const tilesetRef = useRef<Cesium.Cesium3DTileset | null>(null)
   const terrainRef = useRef<Cesium.TerrainProvider | null>(null)
   const truckEntities = useRef<Map<number, Cesium.Entity>>(new Map())
   const routeEntities = useRef<Map<number, Cesium.Entity>>(new Map())
-  const binModels = useRef<Map<number, Cesium.Entity>>(new Map())
+  const binEntities = useRef<Map<number, Cesium.Entity>>(new Map())
 
+  // Initialize Cesium Viewer
   useEffect(() => {
     if (!host.current) return
     if (cesiumToken) Cesium.Ion.defaultAccessToken = cesiumToken
-    
+
     let v: Cesium.Viewer
     try {
       v = new Cesium.Viewer(host.current, {
@@ -85,16 +123,16 @@ export function CesiumWorld({
         selectionIndicator: false,
         shouldAnimate: false,
         requestRenderMode: false,
-        showRenderLoopErrors: false
+        showRenderLoopErrors: false // Prevents the red error modal from interrupting UI
       })
+
       v.scene.globe.depthTestAgainstTerrain = true
       v.camera.setView({
-        destination: Cesium.Cartesian3.fromDegrees(77.5946, 12.9716, 14500),
-        orientation: { heading: Cesium.Math.toRadians(6), pitch: Cesium.Math.toRadians(-55), roll: 0 }
+        destination: Cesium.Cartesian3.fromDegrees(CITY.center.lon, CITY.center.lat, 11500),
+        orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-52), roll: 0 }
       })
       viewer.current = v
 
-      // Catch render errors gracefully without crashing the whole application
       v.scene.renderError.addEventListener((_scene, error) => {
         console.warn('Cesium render error captured:', error)
       })
@@ -121,7 +159,7 @@ export function CesiumWorld({
     }
   }, [])
 
-  // Camera flyTo animation when user searches or navigates
+  // Camera FlyTo animation for search, locate, and ward clicks
   useEffect(() => {
     const v = viewer.current
     if (!v || !flyToTarget) return
@@ -131,59 +169,61 @@ export function CesiumWorld({
       destination: Cesium.Cartesian3.fromDegrees(
         flyToTarget.lon,
         flyToTarget.lat,
-        flyToTarget.height || (view === '3d' ? 1800 : 3500)
+        flyToTarget.height || (view === '3d' ? 1600 : 2800)
       ),
       orientation: {
         heading: v.camera.heading,
         pitch: view === '3d' ? Cesium.Math.toRadians(-45) : Cesium.Math.toRadians(-90),
         roll: 0
       },
-      duration: 1.4
+      duration: 1.2
     })
   }, [flyToTarget, view])
 
-  // Morph between 2D and 3D
+  // Morph between 2D and 3D while PRESERVING exact camera focus without zoom-out
   useEffect(() => {
     const v = viewer.current
     if (!v) return
     try {
       const carto = v.camera.positionCartographic
-      const snapshot = {
-        lon: Cesium.Math.toDegrees(carto.longitude),
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        height: carto.height,
-        heading: v.camera.heading,
-        pitch: v.camera.pitch,
-        roll: v.camera.roll
+      const currentLon = Cesium.Math.toDegrees(carto.longitude)
+      const currentLat = Cesium.Math.toDegrees(carto.latitude)
+      // Preserve current height cleanly without blowing up to 8000m!
+      const currentHeight = Math.max(400, Math.min(carto.height, 22000))
+      const currentHeading = v.camera.heading
+
+      if (view === '2d') {
+        v.scene.morphTo2D(0.4)
+      } else {
+        v.scene.morphTo3D(0.4)
       }
-      if (view === '2d') v.scene.morphTo2D(0.55)
-      else v.scene.morphTo3D(0.55)
 
       window.setTimeout(() => {
         if (!viewer.current) return
-        v.camera.setView({
+        viewer.current.camera.setView({
           destination: Cesium.Cartesian3.fromDegrees(
-            snapshot.lon,
-            snapshot.lat,
-            Math.max(view === '3d' ? 4500 : 8000, snapshot.height)
+            Number.isFinite(currentLon) ? currentLon : CITY.center.lon,
+            Number.isFinite(currentLat) ? currentLat : CITY.center.lat,
+            currentHeight
           ),
           orientation: {
-            heading: snapshot.heading,
-            pitch: view === '3d' ? Math.min(snapshot.pitch, -0.68) : -Math.PI / 2,
-            roll: snapshot.roll
+            heading: currentHeading,
+            pitch: view === '3d' ? Cesium.Math.toRadians(-45) : Cesium.Math.toRadians(-90),
+            roll: 0
           }
         })
-      }, 700)
+      }, 500)
     } catch {}
   }, [view])
 
-  // Imagery & Environment
+  // Map Imagery & Basemap Provider
   useEffect(() => {
     const v = viewer.current
     if (!v) return
     try {
       v.imageryLayers.removeAll()
       v.imageryLayers.addImageryProvider(imagery(mapStyle, { mapTiler: mapTilerKey, mapbox: mapboxToken, stadia: stadiaKey }))
+
       if (tilesetRef.current) { v.scene.primitives.remove(tilesetRef.current); tilesetRef.current = null }
       if (buildingRef.current) { v.scene.primitives.remove(buildingRef.current); buildingRef.current = null }
       if (terrainRef.current) { v.terrainProvider = Cesium.EllipsoidTerrainProvider(); terrainRef.current = null }
@@ -200,17 +240,17 @@ export function CesiumWorld({
             .catch(() => {})
         }
 
-        // Procedural city block instances
+        // Procedural 3D city blocks
         const instances: Cesium.GeometryInstance[] = []
-        for (let i = 0; i < 1800; i++) {
-          const lat = 12.89 + ((i * 97) % 2300) / 10000
-          const lon = 77.47 + ((i * 193) % 3300) / 10000
-          const h = 12 + ((i * 47) % 160)
+        for (let i = 0; i < 480; i++) {
+          const lat = 12.91 + ((i * 97) % 1800) / 10000
+          const lon = 77.52 + ((i * 193) % 2400) / 10000
+          const h = 18 + ((i * 47) % 120)
           const center = Cesium.Cartesian3.fromDegrees(lon, lat, h / 2)
           const model = Cesium.Matrix4.fromTranslation(center, new Cesium.Matrix4())
           const geom = Cesium.BoxGeometry.fromDimensions({
             vertexFormat: Cesium.PerInstanceColorAppearance.VERTEX_FORMAT,
-            dimensions: new Cesium.Cartesian3(85, 64, h)
+            dimensions: new Cesium.Cartesian3(70, 50, h)
           })
           instances.push(
             new Cesium.GeometryInstance({
@@ -218,7 +258,7 @@ export function CesiumWorld({
               modelMatrix: model,
               attributes: {
                 color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-                  new Cesium.Color(0.72 + 0.18 * ((i % 5) / 4), 0.76 + 0.16 * ((i % 7) / 6), 0.82 + 0.12 * ((i % 9) / 8), 0.75)
+                  new Cesium.Color(0.72 + 0.18 * ((i % 5) / 4), 0.76 + 0.16 * ((i % 7) / 6), 0.82 + 0.12 * ((i % 9) / 8), 0.65)
                 )
               }
             })
@@ -237,86 +277,97 @@ export function CesiumWorld({
     }
   }, [mapStyle, view, googleKey, cesiumToken, mapTilerKey, mapboxToken, stadiaKey])
 
-  // Smart Bins Point Cloud
+  // Persistent Smart Bins Rendering (288 road-snapped bins)
   useEffect(() => {
     const v = viewer.current
     if (!v) return
-    if (points.current) v.scene.primitives.remove(points.current)
-    const pc = v.scene.primitives.add(new Cesium.PointPrimitiveCollection({ blendOption: Cesium.BlendOption.OPAQUE }))
-    points.current = pc
-    pointById.current = []
+
+    binEntities.current.forEach(e => v.entities.remove(e))
+    binEntities.current.clear()
 
     for (let i = 0; i < BIN_COUNT; i++) {
-      const p = binPosition(i)
-      const f = fill[i]
-      const color = f >= 90 ? Cesium.Color.fromCssColorString('#ff4757') : f >= 70 ? Cesium.Color.fromCssColorString('#ffa502') : Cesium.Color.fromCssColorString('#2ed573')
-      pointById.current[i] = pc.add({
+      const b = ALL_ROAD_BINS[i] || binPosition(i)
+      const f = Number.isFinite(fill[i]) ? fill[i] : 50
+      const pos = Cesium.Cartesian3.fromDegrees(b.lon, b.lat, view === '3d' ? 10 : 0)
+
+      const e = v.entities.add({
         id: `bin:${i}`,
-        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, view === '3d' ? 18 : 0),
-        pixelSize: f >= 90 ? 5.2 : 3.2,
-        color,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY
+        position: new Cesium.ConstantPositionProperty(pos),
+        billboard: {
+          image: svgBin(f),
+          scale: view === '3d' ? 0.72 : 0.85,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        },
+        model: view === '3d' ? {
+          uri: '/assets/bin.glb',
+          scale: 9,
+          minimumPixelSize: 16,
+          maximumScale: 24
+        } : undefined
       })
-    }
-    return () => {
-      if (points.current && viewer.current) {
-        viewer.current.scene.primitives.remove(points.current)
-        points.current = null
-      }
+      binEntities.current.set(i, e)
     }
   }, [view])
 
-  // Update bin points on fill updates efficiently without recreation
+  // Update bin fill icons when fill levels change
   useEffect(() => {
-    for (let i = 0; i < Math.min(fill.length, pointById.current.length); i++) {
-      const p = pointById.current[i]
-      const f = fill[i]
-      if (!p) continue
-      p.color = f >= 90 ? Cesium.Color.fromCssColorString('#ff4757') : f >= 70 ? Cesium.Color.fromCssColorString('#ffa502') : Cesium.Color.fromCssColorString('#2ed573')
-      p.pixelSize = f >= 90 ? 5.2 : 3.2
+    for (let i = 0; i < BIN_COUNT; i++) {
+      const e = binEntities.current.get(i)
+      if (!e || !e.billboard) continue
+      const f = Number.isFinite(fill[i]) ? fill[i] : 50
+      e.billboard.image = new Cesium.ConstantProperty(svgBin(f))
     }
   }, [fill])
 
-  // Persistent Truck Entities Management: Initialize or switch 2D/3D mode
+  // Persistent Truck Entities Management (32 compactor trucks)
   useEffect(() => {
     const v = viewer.current
     if (!v) return
 
-    // Clean up old entities when view mode changes
     truckEntities.current.forEach(e => v.entities.remove(e))
     truckEntities.current.clear()
     routeEntities.current.forEach(e => v.entities.remove(e))
     routeEntities.current.clear()
 
     trucks.forEach(t => {
-      const safeLat = Number.isFinite(t.lat) ? t.lat : 12.9716
-      const safeLon = Number.isFinite(t.lon) ? t.lon : 77.5946
-      const pos = Cesium.Cartesian3.fromDegrees(safeLon, safeLat, view === '3d' ? 38 : 0)
+      const safeLat = Number.isFinite(t.lat) ? t.lat : CITY.center.lat
+      const safeLon = Number.isFinite(t.lon) ? t.lon : CITY.center.lon
+      const pos = Cesium.Cartesian3.fromDegrees(safeLon, safeLat, view === '3d' ? 22 : 0)
 
       const e = v.entities.add({
         id: `truck:${t.id}`,
         position: new Cesium.ConstantPositionProperty(pos),
         orientation: Cesium.Transforms.headingPitchRollQuaternion(pos, new Cesium.HeadingPitchRoll(0, 0, 0)),
         billboard: view === '2d' ? {
-          image: svgTruck(t.status !== 'breakdown'),
-          scale: 0.58,
-          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          image: svgTruck(t.status, t.name),
+          scale: 0.95,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         } : undefined,
         model: view === '3d' ? {
           uri: '/assets/truck.glb',
-          scale: 22,
-          minimumPixelSize: 26,
-          maximumScale: 50,
-          silhouetteSize: 0
+          scale: 18,
+          minimumPixelSize: 32,
+          maximumScale: 55
         } : undefined,
-        label: { text: t.name, font: '10px Inter', fillColor: Cesium.Color.WHITE, show: false }
+        label: {
+          text: t.name,
+          font: '11px Inter, system-ui',
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -22),
+          show: true
+        }
       })
       truckEntities.current.set(t.id, e)
     })
   }, [view])
 
-  // In-place updates of moving trucks and route lines (Fast, zero recreation, zero WebGL leaks)
+  // In-place updates of trucks and road-following route lines
   useEffect(() => {
     const v = viewer.current
     if (!v) return
@@ -325,38 +376,51 @@ export function CesiumWorld({
       const e = truckEntities.current.get(t.id)
       if (!e) return
 
-      const safeLat = Number.isFinite(t.lat) ? t.lat : 12.9716
-      const safeLon = Number.isFinite(t.lon) ? t.lon : 77.5946
-      const pos = Cesium.Cartesian3.fromDegrees(safeLon, safeLat, view === '3d' ? 38 : 0)
+      const safeLat = Number.isFinite(t.lat) ? t.lat : CITY.center.lat
+      const safeLon = Number.isFinite(t.lon) ? t.lon : CITY.center.lon
+      const pos = Cesium.Cartesian3.fromDegrees(safeLon, safeLat, view === '3d' ? 22 : 0)
 
       // In-place position update
       e.position = new Cesium.ConstantPositionProperty(pos)
 
-      // Calculate smooth direction heading towards next stop
-      if (t.route.length > 0 && t.routeIndex < t.route.length) {
+      // Calculate smooth direction heading along the road path or towards next stop
+      let heading = 0
+      if (t.roadPath && t.roadPath.length > 1 && (t.pathIndex ?? 0) < t.roadPath.length - 1) {
+        const nextPt = t.roadPath[(t.pathIndex ?? 0) + 1]
+        heading = Math.atan2(nextPt[0] - safeLon, nextPt[1] - safeLat)
+      } else if (t.route.length > 0 && t.routeIndex < t.route.length) {
         const stopId = t.route[t.routeIndex]
-        if (Number.isFinite(stopId)) {
-          const nextTarget = binPosition(stopId)
-          if (Number.isFinite(nextTarget.lat) && Number.isFinite(nextTarget.lon)) {
-            const heading = Math.atan2(nextTarget.lon - safeLon, nextTarget.lat - safeLat)
-            if (Number.isFinite(heading)) {
-              e.orientation = new Cesium.ConstantProperty(
-                Cesium.Transforms.headingPitchRollQuaternion(pos, new Cesium.HeadingPitchRoll(heading, 0, 0))
-              )
-            }
-          }
-        }
+        const nextTarget = binPosition(stopId)
+        heading = Math.atan2(nextTarget.lon - safeLon, nextTarget.lat - safeLat)
       }
 
-      // Update route polyline
+      if (Number.isFinite(heading)) {
+        e.orientation = new Cesium.ConstantProperty(
+          Cesium.Transforms.headingPitchRollQuaternion(pos, new Cesium.HeadingPitchRoll(heading, 0, 0))
+        )
+      }
+
+      // Update 2D billboard image if status changed
+      if (view === '2d' && e.billboard) {
+        e.billboard.image = new Cesium.ConstantProperty(svgTruck(t.status, t.name))
+      }
+
+      // Render road-following route polylines
       let routeEntity = routeEntities.current.get(t.id)
       if (t.status !== 'breakdown' && t.route.length > 0) {
         const coords: number[] = [safeLon, safeLat]
-        const slice = t.route.slice(Math.max(0, t.routeIndex), Math.min(t.routeIndex + 8, t.route.length))
-        for (const stop of slice) {
-          if (!Number.isFinite(stop) || stop < 0 || stop >= BIN_COUNT) continue
-          const b = binPosition(stop)
-          if (Number.isFinite(b.lon) && Number.isFinite(b.lat)) {
+
+        // If road path exists, use actual road coordinates
+        if (t.roadPath && t.roadPath.length > 1) {
+          const startIndex = Math.max(0, t.pathIndex ?? 0)
+          for (let p = startIndex; p < t.roadPath.length; p++) {
+            const pt = t.roadPath[p]
+            coords.push(pt[0], pt[1])
+          }
+        } else {
+          const slice = t.route.slice(t.routeIndex, Math.min(t.routeIndex + 5, t.route.length))
+          for (const stop of slice) {
+            const b = binPosition(stop)
             coords.push(b.lon, b.lat)
           }
         }
@@ -367,8 +431,11 @@ export function CesiumWorld({
             routeEntity = v.entities.add({
               polyline: {
                 positions,
-                width: view === '3d' ? 4 : 3,
-                material: Cesium.Color.fromCssColorString('#2ed573').withAlpha(0.85),
+                width: view === '3d' ? 4.5 : 3.5,
+                material: new Cesium.PolylineGlowMaterialProperty({
+                  glowPower: 0.2,
+                  color: Cesium.Color.fromCssColorString('#10b981').withAlpha(0.9)
+                }),
                 clampToGround: view === '2d'
               }
             })
@@ -382,33 +449,7 @@ export function CesiumWorld({
         routeEntities.current.delete(t.id)
       }
     })
-
-    // Update focused 3D bin models
-    binModels.current.forEach(bm => v.entities.remove(bm))
-    binModels.current.clear()
-    for (const i of bins.slice(0, 50)) {
-      if (!Number.isFinite(i) || i < 0 || i >= BIN_COUNT) continue
-      const p = binPosition(i)
-      const f = Number.isFinite(fill[i]) ? fill[i] : 50
-      if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) continue
-      const bm = v.entities.add({
-        id: `binmodel:${i}`,
-        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat, view === '3d' ? 12 : 0),
-        billboard: view === '2d' ? {
-          image: svgBin(f),
-          scale: 0.5,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY
-        } : undefined,
-        model: view === '3d' ? {
-          uri: '/assets/bin.glb',
-          scale: 7,
-          minimumPixelSize: 12,
-          maximumScale: 18
-        } : undefined
-      })
-      binModels.current.set(i, bm)
-    }
-  }, [trucks, view, bins])
+  }, [trucks, view])
 
   return <div ref={host} className="cesium-world" />
 }

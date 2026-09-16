@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import { Search, MapPin, Truck as TruckIcon, Trash2, X } from 'lucide-react'
-import { zoneNames, zoneCenters, binPosition, BIN_COUNT } from '../data/model'
+import { zoneNames, zoneCenters, binPosition, BIN_COUNT, ALL_ROAD_BINS } from '../data/model'
 import type { Truck } from '../data/types'
 
 interface SearchBarProps {
@@ -86,30 +86,23 @@ export function SearchBar({ trucks, fill, onNavigate, onSelectBin, onSelectTruck
       }))
 
     const matchingBins: Array<{ type: 'bin'; id: number; title: string; subtitle: string; fillPct: number }> = []
-    const binNumMatch = q.match(/\d+/)
-    if (binNumMatch) {
-      const parsedNum = parseInt(binNumMatch[0], 10)
-      const targetId = parsedNum > 0 && parsedNum <= BIN_COUNT ? parsedNum - 1 : null
-      if (targetId !== null) {
+    for (let i = 0; i < ALL_ROAD_BINS.length && matchingBins.length < 6; i++) {
+      const b = ALL_ROAD_BINS[i]
+      const f = Math.round(fill[i] || 0)
+      if (
+        b.street.toLowerCase().includes(q) ||
+        b.ward.toLowerCase().includes(q) ||
+        `bin-${i + 1}`.includes(q) ||
+        `bin-${String(i + 1).padStart(3, '0')}`.toLowerCase().includes(q) ||
+        ((q.includes('crit') || q.includes('full') || q.includes('over')) && f >= 80)
+      ) {
         matchingBins.push({
           type: 'bin',
-          id: targetId,
-          title: `BIN-${String(targetId + 1).padStart(6, '0')}`,
-          subtitle: `Fill Level: ${Math.round(fill[targetId] || 0)}%`,
-          fillPct: Math.round(fill[targetId] || 0)
+          id: i,
+          title: `BIN-${String(i + 1).padStart(3, '0')} · ${b.street}`,
+          subtitle: `${b.ward} · Fill: ${f}%`,
+          fillPct: f
         })
-      }
-    } else if (q.includes('crit') || q.includes('full') || q.includes('over')) {
-      for (let i = 0; i < fill.length && matchingBins.length < 4; i += 237) {
-        if (fill[i] >= 88) {
-          matchingBins.push({
-            type: 'bin',
-            id: i,
-            title: `BIN-${String(i + 1).padStart(6, '0')}`,
-            subtitle: `Critical ${Math.round(fill[i])}% full`,
-            fillPct: Math.round(fill[i])
-          })
-        }
       }
     }
 

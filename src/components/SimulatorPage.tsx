@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowLeft, Clock3, Eye, Flame, Layers3, Map,
-  Pause, Play, RotateCcw, Settings, SlidersHorizontal, Truck, Zap
+  Pause, Play, RotateCcw, Settings, SlidersHorizontal, Truck, Zap,
+  Navigation, Crosshair, Fuel, Leaf, ChevronDown, ChevronUp, Terminal,
+  Radio, CheckCircle2
 } from 'lucide-react'
 import { useTwin } from '../store/twin'
 import { useProviders } from '../store/providers'
@@ -9,6 +11,7 @@ import { CesiumWorld } from './CesiumWorld'
 import { ProviderPanel } from './ProviderPanel'
 import { SearchBar } from './SearchBar'
 import { SpeedSelect } from './SpeedSelect'
+import { BENGALURU_WARDS } from '../data/bengaluruRoads'
 import type { MapStyle } from '../data/types'
 
 export function SimulatorPage({ go }: { go: (p: string) => void }) {
@@ -16,6 +19,9 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
   const p = useProviders()
   const [panel, setPanel] = useState<'none' | 'providers' | 'layers'>('none')
   const [flyToTarget, setFlyToTarget] = useState<{ lat: number; lon: number; height?: number } | null>(null)
+  const [showLogs, setShowLogs] = useState(true)
+  const [mobileTab, setMobileTab] = useState<'map' | 'kpis' | 'logs' | 'controls'>('map')
+  const [locateStatus, setLocateStatus] = useState<string | null>(null)
 
   useEffect(() => {
     document.documentElement.dataset.theme = s.theme
@@ -26,7 +32,7 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
   // Simulation clock ticker
   useEffect(() => {
     if (!s.playing) return
-    const t = window.setInterval(() => s.step(0.02 * s.speed), 1000)
+    const t = window.setInterval(() => s.step(0.015 * s.speed), 1000)
     return () => window.clearInterval(t)
   }, [s.playing, s.speed])
 
@@ -42,11 +48,10 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
 
   const [mapStyle, setMapStyle] = useState<MapStyle>(s.mapStyle)
   const styleButtons: [MapStyle, string][] = [
-    ['streets', 'Standard'],
-    ['light', 'Light'],
-    ['dark', 'Dark'],
+    ['streets', 'OSM Streets'],
     ['satellite', 'Satellite'],
-    ['terrain', 'Terrain']
+    ['dark', 'Dark Cyber'],
+    ['light', 'Light Clean']
   ]
 
   const focused = s.selectedBin != null ? s.selectedBin : null
@@ -60,8 +65,54 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
     s.selectTruck(id)
   }
 
+  // Locate Feature (Browser Geolocation or Bengaluru Center)
+  const handleLocateMe = () => {
+    setLocateStatus('Locating...')
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude
+          const lon = pos.coords.longitude
+          // Check if user is within Karnataka / South India bounds
+          if (lat >= 11.0 && lat <= 15.0 && lon >= 75.0 && lon <= 80.0) {
+            setFlyToTarget({ lat, lon, height: 1800 })
+            setLocateStatus('Located!')
+          } else {
+            // Center on Bengaluru BBMP Headquarters
+            setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2400 })
+            setLocateStatus('Centered on Bengaluru')
+          }
+          setTimeout(() => setLocateStatus(null), 3000)
+        },
+        () => {
+          // Permission denied or error; center on Bengaluru Central
+          setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2800 })
+          setLocateStatus('Centered on Central Hub')
+          setTimeout(() => setLocateStatus(null), 3000)
+        },
+        { timeout: 5000 }
+      )
+    } else {
+      setFlyToTarget({ lat: 12.9716, lon: 77.5946, height: 2800 })
+      setLocateStatus('Centered')
+      setTimeout(() => setLocateStatus(null), 2500)
+    }
+  }
+
+  // Scrubbable Timeline Handler
+  const handleTimelineScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const minutesFromMidnight = Number(e.target.value)
+    const base = new Date(s.time)
+    base.setHours(0, 0, 0, 0)
+    const targetTime = base.getTime() + minutesFromMidnight * 60000
+    s.seekTime(targetTime)
+  }
+
+  const currentMinutesFromMidnight = d.getHours() * 60 + d.getMinutes()
+
   return (
     <div className="sim-page">
+      {/* 3D WebGL Cesium Map Canvas */}
       <div className="sim-world">
         <CesiumWorld
           view={s.view}
@@ -80,7 +131,7 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
         />
       </div>
 
-      {/* Top Bar with Brand, Search, Clock, and Quick Actions */}
+      {/* Top Bar with Brand, Search, Locate, Clock, and Quick Actions */}
       <header className="sim-topbar glass">
         <button className="back-btn" onClick={() => go('/')} title="Return to Landing Page">
           <ArrowLeft size={16} />
@@ -100,12 +151,24 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
           onSelectTruck={handleSelectTruck}
         />
 
+        {/* Locate Me Button */}
+        <button
+          className="locate-btn glass"
+          onClick={handleLocateMe}
+          title="Locate Current Position or Center on Central Hub"
+        >
+          <Crosshair size={15} className="text-cyan" />
+          <span className="hide-on-mobile">{locateStatus || 'Locate'}</span>
+        </button>
+
+        {/* Live Simulation Clock & Speed Badge */}
         <div className="clock-chip">
           <span className="live-dot" />
           <b>{timeText}</b>
           <span className="speed-chip-badge">{s.speed}×</span>
         </div>
 
+        {/* Top Controls */}
         <div className="top-actions">
           <button
             onClick={() => setPanel(panel === 'providers' ? 'none' : 'providers')}
@@ -126,224 +189,219 @@ export function SimulatorPage({ go }: { go: (p: string) => void }) {
         </div>
       </header>
 
-      {/* Navigation Dock */}
-      <div className="sim-nav glass">
-        <button onClick={() => go('/simulator')} className="active">
-          <Activity size={14} className="text-emerald" />Twin
-        </button>
-        <button onClick={() => go('/fleet')}>
-          <Truck size={14} className="text-cyan" />Fleet
-        </button>
-        <button onClick={() => go('/scenarios')}>
-          <Flame size={14} className="text-coral" />Scenarios
-        </button>
-        <button onClick={() => go('/analytics')}>
-          <SlidersHorizontal size={14} className="text-indigo" />Analytics
-        </button>
-        <button onClick={() => go('/data')}>
-          <Layers3 size={14} className="text-amber" />Data
-        </button>
-      </div>
-
-      {/* 2D / 3D Mode Switcher */}
+      {/* 2D / 3D Mode Switcher (Centered Top) */}
       <div className="mode-switch glass">
         <button
           className={s.view === '2d' ? 'active' : ''}
           onClick={() => s.setView('2d')}
         >
-          <Map size={14} />2D
+          <Map size={14} />2D OSM
         </button>
         <button
           className={s.view === '3d' ? 'active' : ''}
           onClick={() => s.setView('3d')}
         >
-          <Eye size={14} />3D
+          <Eye size={14} />3D City
         </button>
       </div>
 
-      {/* Left Cockpit Controls */}
-      <div className="left-cockpit">
-        <div className="eyebrow cyber-tag">CITY OPS / BENGALURU</div>
-        <h1>Under one view.</h1>
-        <p>Watch municipal waste demand evolve dynamically across a 120,000-bin living twin.</p>
-        <div className="cockpit-actions">
-          <button
-            className={`primary-btn ${s.playing ? 'active-run-btn' : 'glow-btn'}`}
-            onClick={() => s.togglePlaying()}
-          >
-            {s.playing ? <Pause size={15} /> : <Play size={15} />}
-            {s.playing ? 'Pause Simulation' : 'Run Simulation'}
-          </button>
-          <button className="secondary-btn glass" onClick={() => go('/scenarios')}>
-            <Flame size={15} className="text-coral" /> Stress Test
-          </button>
-        </div>
+      {/* Main HUD Overlay Container (Zero Overlapping Cards) */}
+      <div className="sim-hud-container">
+        {/* Left Column: Cockpit Controls & Quick Corridor Navigator */}
+        <aside className={`hud-column hud-left ${mobileTab === 'controls' ? 'mobile-visible' : ''}`}>
+          <div className="glass cockpit-card">
+            <div className="eyebrow cyber-tag">CITY OPS / 24 WARDS</div>
+            <h3>Autonomous Dispatch</h3>
+            <p>Real-time OSRM road graph balancing 288 smart bins across Bengaluru.</p>
+
+            <div className="cockpit-actions">
+              <button
+                className={`primary-btn ${s.playing ? 'active-run-btn' : 'glow-btn'}`}
+                onClick={() => s.togglePlaying()}
+              >
+                {s.playing ? <Pause size={15} /> : <Play size={15} />}
+                {s.playing ? 'Pause Engine' : 'Run Simulation'}
+              </button>
+              <button className="secondary-btn glass" onClick={() => go('/scenarios')}>
+                <Flame size={15} className="text-coral" /> Stress Lab
+              </button>
+            </div>
+
+            {/* Quick Corridor Selector */}
+            <div className="ward-quick-chips">
+              <span className="chip-label">Quick Jump:</span>
+              <button onClick={() => setFlyToTarget({ lat: 12.9755, lon: 77.6066, height: 1600 })}>MG Rd</button>
+              <button onClick={() => setFlyToTarget({ lat: 12.9340, lon: 77.6250, height: 1600 })}>Koramangala</button>
+              <button onClick={() => setFlyToTarget({ lat: 12.9784, lon: 77.6408, height: 1600 })}>Indiranagar</button>
+              <button onClick={() => setFlyToTarget({ lat: 12.9860, lon: 77.7290, height: 1800 })}>Whitefield</button>
+              <button onClick={() => setFlyToTarget({ lat: 12.9165, lon: 77.6515, height: 1600 })}>HSR</button>
+            </div>
+          </div>
+
+          {/* Basemap Switcher Card */}
+          <div className="glass map-switcher-card">
+            <div className="section-title">BASEMAP & IMAGERY</div>
+            <div className="style-row">
+              {styleButtons.map(([v, l]) => (
+                <button
+                  key={v}
+                  className={mapStyle === v ? 'active' : ''}
+                  onClick={() => {
+                    setMapStyle(v)
+                    s.setMapStyle(v)
+                  }}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        {/* Right Column: Live Telemetry Rail & AI Decision Log */}
+        <aside className={`hud-column hud-right ${mobileTab === 'kpis' || mobileTab === 'logs' ? 'mobile-visible' : ''}`}>
+          {/* Real-time KPI Cards */}
+          <div className="metrics-grid">
+            <Metric
+              label="OPTIMIZED ROUTE"
+              value={`${s.metrics.optimizedKm} km`}
+              sub={`vs ${s.metrics.fixedKm} km static`}
+              icon={<Zap size={14} className="text-emerald" />}
+              trend="optimal"
+            />
+            <Metric
+              label="ROUTE TIME"
+              value={`${s.metrics.optimizedMinutes} min`}
+              sub={`vs ${s.metrics.fixedMinutes} min static`}
+              icon={<Clock3 size={14} className="text-cyan" />}
+              trend="optimal"
+            />
+            <Metric
+              label="DIESEL SAVED"
+              value={`${s.metrics.fuelSavedLiters} L`}
+              sub={`₹${s.metrics.costSavedInr.toLocaleString()} saved`}
+              icon={<Fuel size={14} className="text-amber" />}
+              trend="optimal"
+            />
+            <Metric
+              label="CO₂ AVOIDED"
+              value={`${s.metrics.co2AvoidedKg} kg`}
+              sub="Direct ESG reduction"
+              icon={<Leaf size={14} className="text-emerald" />}
+              trend="optimal"
+            />
+          </div>
+
+          {/* Live AI Decision Log & Operational Audit Trail */}
+          <div className="glass audit-log-card">
+            <div className="audit-head">
+              <div className="audit-title">
+                <Terminal size={14} className="text-emerald" />
+                <b>AI DECISION STREAM</b>
+                <span className="live-pill">LIVE</span>
+              </div>
+              <button
+                className="toggle-log-btn"
+                onClick={() => setShowLogs(!showLogs)}
+                title="Collapse or expand decision log"
+              >
+                {showLogs ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
+
+            {showLogs && (
+              <div className="audit-stream">
+                {s.auditLogs.map((log) => (
+                  <div key={log.id} className={`log-item log-${log.type}`}>
+                    <div className="log-meta">
+                      <span className="log-time">{log.time}</span>
+                      <span className="log-truck">{log.truckName}</span>
+                      <span className="log-zone">{log.zoneName}</span>
+                    </div>
+                    <div className="log-action">{log.action}</div>
+                    <div className="log-rationale">{log.rationale}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
 
-      {/* Metrics Rail */}
-      <div className="metrics-rail">
-        <Metric
-          label="OPTIMIZED ROUTE"
-          value={`${s.metrics.optimizedKm} km`}
-          sub={`vs ${s.metrics.fixedKm} km fixed`}
-          icon={<Zap size={14} className="text-emerald" />}
-          trend="optimal"
-        />
-        <Metric
-          label="ROUTE TIME"
-          value={`${s.metrics.optimizedMinutes} min`}
-          sub={`vs ${s.metrics.fixedMinutes} min fixed`}
-          icon={<Clock3 size={14} className="text-cyan" />}
-          trend="optimal"
-        />
-        <Metric
-          label="CRITICAL BINS"
-          value={critical.toLocaleString()}
-          sub={`${s.fill.length.toLocaleString()} monitored`}
-          icon={<AlertTriangle size={14} className="text-coral" />}
-          trend={critical > 500 ? 'alert' : 'neutral'}
-        />
-        <Metric
-          label="FLEET LOAD"
-          value={`${s.metrics.fleetLoadPct}%`}
-          sub={`${s.metrics.activeTrucks} vehicles active`}
-          icon={<Truck size={14} className="text-indigo" />}
-          trend="neutral"
-        />
-      </div>
-
-      {/* Map Style Controls */}
-      <div className="map-controls glass">
-        <div className="section-title">BASEMAP & IMAGERY</div>
-        <div className="style-row">
-          {styleButtons.map(([v, l]) => (
-            <button
-              key={v}
-              className={mapStyle === v ? 'active' : ''}
-              onClick={() => {
-                setMapStyle(v)
-                s.setMapStyle(v)
-              }}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-        <div className="control-note">
-          {mapStyle === 'satellite' && !p.mapTilerKey && !p.stadiaKey && !p.mapboxToken
-            ? 'Satellite uses Esri high-res imagery.'
-            : ''}
-          {s.view === '3d' && p.googleMapsKey
-            ? 'Google Photorealistic 3D enabled.'
-            : 'Procedural 3D city blocks active.'}
-        </div>
-      </div>
-
-      {/* Simulation Timeline with Styled Speed Dropdown */}
-      <div className="timeline glass">
-        <button onClick={() => s.rewind(1)} title="Rewind 1 hour">
-          ↶
+      {/* Mobile Tab Bar Switcher (< 768px) */}
+      <div className="mobile-hud-bar glass">
+        <button className={mobileTab === 'map' ? 'active' : ''} onClick={() => setMobileTab('map')}>
+          <Map size={16} /> Map
         </button>
-        <div className="timeline-main">
-          <div className="timeline-title">
-            SIMULATION CLOCK{' '}
-            <span>
-              {d.getHours().toString().padStart(2, '0')}:
-              {d.getMinutes().toString().padStart(2, '0')} IST
-            </span>
-          </div>
-          <div className="timeline-track">
-            <div
-              className="timeline-fill"
-              style={{
-                width: `${(((d.getMinutes() + d.getHours() * 60) % 1440) / 1440) * 100}%`
-              }}
-            />
-          </div>
-          <div className="timeline-meta">
-            <span>ROLLING 60-MIN BUFFER</span>
-            <span>{s.history.length} snapshots</span>
-          </div>
-        </div>
-
-        {/* Custom UI-Styled Speed Dropdown */}
-        <SpeedSelect speed={s.speed} onChange={s.setSpeed} />
+        <button className={mobileTab === 'kpis' ? 'active' : ''} onClick={() => setMobileTab('kpis')}>
+          <Zap size={16} /> KPIs
+        </button>
+        <button className={mobileTab === 'logs' ? 'active' : ''} onClick={() => setMobileTab('logs')}>
+          <Terminal size={16} /> Decision Log
+        </button>
+        <button className={mobileTab === 'controls' ? 'active' : ''} onClick={() => setMobileTab('controls')}>
+          <SlidersHorizontal size={16} /> Controls
+        </button>
       </div>
 
-      {/* Status Pill */}
-      <div className="status-pill glass">
-        <span className={`live-dot ${s.events.length ? 'disruption-active' : ''}`} />
-        {s.events.length
-          ? `${s.events.length} scenario disruption${s.events.length > 1 ? 's' : ''} active`
-          : 'Baseline simulation running'}
+      {/* Bottom Floating Timeline Dock with Scrubbable Scrubber */}
+      <div className="sim-bottom-dock">
+        {/* Navigation Dock */}
+        <nav className="sim-nav glass">
+          <button onClick={() => go('/simulator')} className="active" title="Live Twin">
+            <Activity size={14} className="text-emerald" /><span>Twin</span>
+          </button>
+          <button onClick={() => go('/fleet')} title="Fleet Operations">
+            <Truck size={14} className="text-cyan" /><span>Fleet</span>
+          </button>
+          <button onClick={() => go('/scenarios')} title="Scenario Lab">
+            <Flame size={14} className="text-coral" /><span>Scenarios</span>
+          </button>
+          <button onClick={() => go('/analytics')} title="Live Analytics">
+            <SlidersHorizontal size={14} className="text-indigo" /><span>Analytics</span>
+          </button>
+        </nav>
+
+        {/* Scrollable & Scrubbable Timeline Scrubber */}
+        <div className="timeline-scrubber glass">
+          <button className="time-step-btn" onClick={() => s.rewind(1)} title="Rewind 1 Hour">
+            ↶ -1h
+          </button>
+
+          <div className="scrubber-main">
+            <div className="scrubber-labels">
+              <span className="scrubber-clock">
+                <Clock3 size={13} className="text-cyan" />
+                <b>{d.getHours().toString().padStart(2, '0')}:{d.getMinutes().toString().padStart(2, '0')} IST</b>
+              </span>
+              <span className="scrubber-hint hide-on-mobile">Drag slider or wheel-scroll to travel time</span>
+            </div>
+
+            <input
+              type="range"
+              min="360"
+              max="1260"
+              step="5"
+              value={currentMinutesFromMidnight}
+              onChange={handleTimelineScrub}
+              className="time-slider"
+              title="Drag to travel through time (06:00 to 21:00)"
+            />
+          </div>
+
+          {/* Custom UI Speed Dropdown */}
+          <SpeedSelect currentSpeed={s.speed} onSelectSpeed={s.setSpeed} />
+
+          <button className="time-step-btn" onClick={() => s.step(1)} title="Fast-forward 1 Hour">
+            +1h ↷
+          </button>
+        </div>
       </div>
 
-      {/* Focused Bin Entity Card */}
-      {focused != null && (
-        <div className="entity-card glass">
-          <div className="entity-kicker">SMART BIN #{String(focused + 1).padStart(6, '0')}</div>
-          <b className={s.fill[focused] >= 90 ? 'text-coral' : s.fill[focused] >= 70 ? 'text-amber' : 'text-emerald'}>
-            {s.fill[focused].toFixed(0)}% full
-          </b>
-          <div className="progress">
-            <div
-              style={{
-                width: `${s.fill[focused]}%`,
-                background:
-                  s.fill[focused] >= 90
-                    ? 'var(--coral)'
-                    : s.fill[focused] >= 70
-                    ? 'var(--amber)'
-                    : 'var(--emerald)'
-              }}
-            />
-          </div>
-          <div className="entity-row">
-            <span>Sensor Status</span>
-            <strong>{s.fill[focused] >= 90 ? 'Critical Urgent' : 'Operational'}</strong>
-          </div>
-          <button onClick={() => s.selectBin(null)}>Dismiss</button>
-        </div>
+      {/* Settings / Providers Drawer */}
+      {panel === 'providers' && (
+        <ProviderPanel onClose={() => setPanel('none')} />
       )}
-
-      {/* Focused Truck Entity Card */}
-      {s.selectedTruck != null && (
-        <div className="entity-card glass">
-          <div className="entity-kicker">VEHICLE {s.trucks[s.selectedTruck]?.name}</div>
-          <b className={`status-badge ${s.trucks[s.selectedTruck]?.status}`}>
-            {s.trucks[s.selectedTruck]?.status.toUpperCase()}
-          </b>
-          <div className="progress">
-            <div
-              style={{
-                width: `${Math.round(
-                  ((s.trucks[s.selectedTruck]?.loadKg || 0) /
-                    (s.trucks[s.selectedTruck]?.capacityKg || 1)) *
-                    100
-                )}%`,
-                background: 'var(--cyan)'
-              }}
-            />
-          </div>
-          <div className="entity-row">
-            <span>Payload</span>
-            <strong>
-              {Math.round(s.trucks[s.selectedTruck]?.loadKg || 0)} /{' '}
-              {s.trucks[s.selectedTruck]?.capacityKg} kg
-            </strong>
-          </div>
-          <div className="entity-row">
-            <span>Remaining Stops</span>
-            <strong>{s.trucks[s.selectedTruck]?.route.length || 0} bins</strong>
-          </div>
-          <button onClick={() => s.selectTruck(null)}>Dismiss</button>
-        </div>
-      )}
-
-      {/* Settings / Provider Panel Drawer */}
-      {panel === 'providers' && <ProviderPanel onClose={() => setPanel('none')} />}
-
-      <div className="bottom-hint">120,000 Smart Bins · 512 Fleet Units · High-Frequency Municipal Model</div>
     </div>
   )
 }
@@ -362,13 +420,13 @@ function Metric({
   trend?: 'optimal' | 'alert' | 'neutral'
 }) {
   return (
-    <div className={`metric glass ${trend || ''}`}>
-      <div className="metric-icon">{icon}</div>
-      <div>
-        <span>{label}</span>
-        <b>{value}</b>
-        <small>{sub}</small>
+    <div className={`metric-card glass trend-${trend || 'neutral'}`}>
+      <div className="metric-header">
+        <span className="metric-label">{label}</span>
+        <div className="metric-icon">{icon}</div>
       </div>
+      <b className="metric-value">{value}</b>
+      <small className="metric-sub">{sub}</small>
     </div>
   )
 }
