@@ -1,5 +1,5 @@
 import type { ScenarioEvent, Truck, AuditLogItem } from '../data/types'
-import { BIN_COUNT, ZONE_COUNT, binPosition, binZones, hash, zoneForLatLon, ALL_ROAD_BINS, BENGALURU_WARDS, BBMP_DEPOTS } from '../data/model'
+import { BIN_COUNT, ZONE_COUNT, binPosition, binZones, zoneForLatLon, ALL_ROAD_BINS, BBMP_DEPOTS } from '../data/model'
 import { getRoadRouteSync, fetchRoadRoute } from './osrm'
 
 // Weight of waste in a fully-filled bin (100% = 500 kg)
