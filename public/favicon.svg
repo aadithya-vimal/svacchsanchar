@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="cyber-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="50%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+    <radialGradient id="glow-grad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Outer ambient glow ring -->
+  <circle cx="32" cy="32" r="30" fill="#07090c" stroke="url(#cyber-grad)" stroke-width="2.5" />
+  <circle cx="32" cy="32" r="26" fill="url(#glow-grad)" opacity="0.4" />
+
+  <!-- Stylized Globe Lat/Lon Grid lines -->
+  <ellipse cx="32" cy="32" rx="20" ry="9" stroke="#06b6d4" stroke-width="1.2" stroke-opacity="0.5" stroke-dasharray="3 2" />
+  <ellipse cx="32" cy="32" rx="9" ry="20" stroke="#10b981" stroke-width="1.2" stroke-opacity="0.5" />
+
+  <!-- Eco Leaf & Smart Connectivity Node icon -->
+  <path d="M22 36C22 25 31 18 42 16C42 27 35 36 24 38" fill="url(#cyber-grad)" opacity="0.9" />
+  <path d="M24 38C28 32 35 27 42 16" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Bengaluru Center Glowing Beacon -->
+  <circle cx="35" cy="27" r="4.5" fill="#06b6d4" />
+  <circle cx="35" cy="27" r="2.5" fill="#ffffff" />
+  <circle cx="35" cy="27" r="7" stroke="#10b981" stroke-width="1.5" opacity="0.8" />
+</svg>
