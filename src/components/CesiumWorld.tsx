@@ -131,6 +131,11 @@ export function CesiumWorld({
         destination: Cesium.Cartesian3.fromDegrees(CITY.center.lon, CITY.center.lat, 11500),
         orientation: { heading: Cesium.Math.toRadians(0), pitch: Cesium.Math.toRadians(-52), roll: 0 }
       })
+
+      // Zoom constraints so Earth can never be lost
+      v.scene.screenSpaceCameraController.minimumZoomDistance = 250
+      v.scene.screenSpaceCameraController.maximumZoomDistance = 18000
+
       viewer.current = v
 
       v.scene.renderError.addEventListener((_scene, error) => {
@@ -141,9 +146,20 @@ export function CesiumWorld({
       handler.setInputAction((m: any) => {
         try {
           const p = v.scene.pick(m.position)
-          const id = p?.id?.id || p?.primitive?.id || ''
-          if (typeof id === 'string' && id.startsWith('bin:')) onSelectBin(Number(id.slice(4)))
-          if (typeof id === 'string' && id.startsWith('truck:')) onSelectTruck(Number(id.slice(6)))
+          if (!p) return
+          // In Cesium, scene.pick for an Entity returns {id: Entity, ...}
+          // The Entity's .id property is the string ID we assigned
+          let entityId: string | null = null
+          if (p.id instanceof Cesium.Entity) {
+            entityId = p.id.id as string
+          } else if (typeof p.id === 'string') {
+            entityId = p.id
+          } else if (p.primitive?.id && typeof p.primitive.id === 'string') {
+            entityId = p.primitive.id
+          }
+          if (!entityId) return
+          if (entityId.startsWith('bin:')) onSelectBin(Number(entityId.slice(4)))
+          if (entityId.startsWith('truck:')) onSelectTruck(Number(entityId.slice(6)))
         } catch {}
       }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
 
@@ -158,6 +174,7 @@ export function CesiumWorld({
       console.error('Cesium initialization error:', e)
     }
   }, [])
+
 
   // Camera FlyTo animation for search, locate, and ward clicks
   useEffect(() => {
@@ -288,26 +305,24 @@ export function CesiumWorld({
     for (let i = 0; i < BIN_COUNT; i++) {
       const b = ALL_ROAD_BINS[i] || binPosition(i)
       const f = Number.isFinite(fill[i]) ? fill[i] : 50
-      const pos = Cesium.Cartesian3.fromDegrees(b.lon, b.lat, view === '3d' ? 10 : 0)
+      const height = view === '3d' ? 8 : 0
+      const pos = Cesium.Cartesian3.fromDegrees(b.lon, b.lat, height)
 
       const e = v.entities.add({
         id: `bin:${i}`,
         position: new Cesium.ConstantPositionProperty(pos),
         billboard: {
           image: svgBin(f),
-          scale: view === '3d' ? 0.72 : 0.85,
+          scale: view === '3d' ? 0.9 : 1.0,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY
-        },
-        model: view === '3d' ? {
-          uri: '/assets/bin.glb',
-          scale: 9,
-          minimumPixelSize: 16,
-          maximumScale: 24
-        } : undefined
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          pixelOffset: new Cesium.Cartesian2(0, 0)
+        }
       })
       binEntities.current.set(i, e)
     }
+
   }, [view])
 
   // Update bin fill icons when fill levels change
@@ -333,39 +348,36 @@ export function CesiumWorld({
     trucks.forEach(t => {
       const safeLat = Number.isFinite(t.lat) ? t.lat : CITY.center.lat
       const safeLon = Number.isFinite(t.lon) ? t.lon : CITY.center.lon
-      const pos = Cesium.Cartesian3.fromDegrees(safeLon, safeLat, view === '3d' ? 22 : 0)
+      const height = view === '3d' ? 18 : 0
+      const pos = Cesium.Cartesian3.fromDegrees(safeLon, safeLat, height)
 
       const e = v.entities.add({
         id: `truck:${t.id}`,
         position: new Cesium.ConstantPositionProperty(pos),
-        orientation: Cesium.Transforms.headingPitchRollQuaternion(pos, new Cesium.HeadingPitchRoll(0, 0, 0)),
-        billboard: view === '2d' ? {
+        billboard: {
           image: svgTruck(t.status, t.name),
-          scale: 0.95,
+          scale: view === '3d' ? 1.1 : 1.05,
           verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
-        } : undefined,
-        model: view === '3d' ? {
-          uri: '/assets/truck.glb',
-          scale: 18,
-          minimumPixelSize: 32,
-          maximumScale: 55
-        } : undefined,
+        },
         label: {
           text: t.name,
-          font: '11px Inter, system-ui',
+          font: '600 11px Inter, system-ui',
           fillColor: Cesium.Color.WHITE,
           outlineColor: Cesium.Color.BLACK,
           outlineWidth: 2,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          pixelOffset: new Cesium.Cartesian2(0, -22),
-          show: true
+          pixelOffset: new Cesium.Cartesian2(0, -30),
+          show: true,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
         }
       })
       truckEntities.current.set(t.id, e)
     })
   }, [view])
+
 
   // In-place updates of trucks and road-following route lines
   useEffect(() => {
@@ -400,10 +412,11 @@ export function CesiumWorld({
         )
       }
 
-      // Update 2D billboard image if status changed
-      if (view === '2d' && e.billboard) {
+      // Update billboard image if status changed (both 2D and 3D)
+      if (e.billboard) {
         e.billboard.image = new Cesium.ConstantProperty(svgTruck(t.status, t.name))
       }
+
 
       // Render road-following route polylines
       let routeEntity = routeEntities.current.get(t.id)

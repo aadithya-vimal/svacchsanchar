@@ -76,7 +76,7 @@ export function makeTrucks() {
       id: i,
       name: `SWC-${String(i + 1).padStart(3, '0')}`,
       capacityKg: 1200 + (i % 3) * 400,
-      loadKg: Math.round((0.18 + hash(i * 2.17) * 0.35) * (1200 + (i % 3) * 400)),
+      loadKg: 0, // Trucks start empty at depot — ready for collection
       status: (i % 8 === 0 ? 'idle' : 'active') as 'idle' | 'active' | 'returning' | 'breakdown',
       lat: startLoc.lat + (hash(i * 3.7) - 0.5) * 0.003,
       lon: startLoc.lon + (hash(i * 5.1) - 0.5) * 0.003,

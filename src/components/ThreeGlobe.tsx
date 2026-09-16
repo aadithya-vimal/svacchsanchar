@@ -84,12 +84,17 @@ export function ThreeGlobe({ className }: ThreeGlobeProps) {
     globeGroup.add(atmoMesh)
 
     // Bengaluru Location Marker (Lat: 12.9716, Lon: 77.5946)
-    const lat = 12.9716 * (Math.PI / 180)
-    const lon = (77.5946 + 90) * (Math.PI / 180) // Offset for standard equirectangular mapping
+    // For equirectangular map: X is along equator, texture left edge = -180°
+    // Correct spherical coords: phi (polar) from +Y axis, theta around Y axis
+    const markerLat = 12.9716 * (Math.PI / 180)
+    const markerLonDeg = 77.5946  // East longitude
+    // Spherical: x = r*cos(lat)*sin(lon), y = r*sin(lat), z = r*cos(lat)*cos(lon)
+    // With three.js Y-up and texture lon=0 at +Z axis:
+    const markerLonRad = markerLonDeg * (Math.PI / 180)
     const markerPos = new THREE.Vector3(
-      -(radius * 1.012) * Math.cos(lat) * Math.sin(lon),
-      radius * 1.012 * Math.sin(lat),
-      radius * 1.012 * Math.cos(lat) * Math.cos(lon)
+      (radius * 1.015) * Math.cos(markerLat) * Math.sin(markerLonRad),
+      (radius * 1.015) * Math.sin(markerLat),
+      (radius * 1.015) * Math.cos(markerLat) * Math.cos(markerLonRad)
     )
 
     // Pinpoint core
@@ -148,16 +153,21 @@ export function ThreeGlobe({ className }: ThreeGlobeProps) {
     const particles = new THREE.Points(particleGeo, particleMat)
     globeGroup.add(particles)
 
-    // Initial globe orientation highlighting India / Bengaluru
-    globeGroup.rotation.y = -1.25
-    globeGroup.rotation.x = 0.22
+    // Initial globe orientation: rotate so India/Bengaluru faces the viewer
+    // Bengaluru is at ~77.6°E longitude. With SphereGeometry default UV mapping,
+    // lon=0 (prime meridian) maps to +Z. Rotate Y by -77.6° to bring India to front.
+    // Then apply slight tilt to show Indian subcontinent beautifully
+    const indiaRotY = -(77.5946 * Math.PI / 180)
+    globeGroup.rotation.y = indiaRotY
+    globeGroup.rotation.x = 0.18  // Slight northward tilt
 
-    // Interactive Drag Controls
+
     let isDragging = false
     let prevMouseX = 0
     let prevMouseY = 0
-    let targetRotationY = globeGroup.rotation.y
-    let targetRotationX = globeGroup.rotation.x
+    let targetRotationY = indiaRotY
+    let targetRotationX = 0.18
+
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { BIN_COUNT, CITY, createFillArray, makeTrucks, zoneForLatLon } from '../data/model'
 import type { Metrics, ScenarioEvent, ThemeMode, Truck, ViewMode, MapStyle, AuditLogItem } from '../data/types'
-import { tickFill, advanceTrucks } from '../engine/sim'
+import { tickFill, advanceTrucks, prefetchTruckRoutes } from '../engine/sim'
 import { fixedBaseline, optimize, type Plan } from '../engine/routing'
 
 const START = new Date('2026-09-16T07:00:00+05:30').getTime()
@@ -108,7 +108,7 @@ interface State {
   togglePlaying: () => void
   setPlaying: (p: boolean) => void
   setSpeed: (n: number) => void
-  step: (hours: number) => void
+  step: (hours: number) => Promise<void>
   seekTime: (targetTime: number) => void
   rewind: (hours: number) => void
   reset: () => void
@@ -146,7 +146,7 @@ export const useTwin = create<State>((set, get) => ({
   setPlaying: (playing) => set({ playing }),
   setSpeed: (speed) => set({ speed }),
 
-  step: (hours) => {
+  step: async (hours: number) => {
     const s = get()
     const fill = s.fill.slice()
     const time = s.time + hours * 3600000
@@ -167,11 +167,26 @@ export const useTwin = create<State>((set, get) => ({
           t.route = p.stops
           t.routeIndex = 0
           t.status = 'active'
-          t.roadPath = []
+          t.roadPath = [] // Clear so prefetch will populate it
           t.pathIndex = 0
         }
       }
     }
+
+    // Async prefetch OSRM routes for trucks that need new road paths
+    // This runs in background — next tick will use the cached routes
+    prefetchTruckRoutes(moved).then(withRoutes => {
+      // Merge the fetched routes back into current state without overwriting other changes
+      set(s2 => ({
+        trucks: s2.trucks.map((t, i) => {
+          const fetched = withRoutes[i]
+          if (fetched && fetched.roadPath && fetched.roadPath.length > 0 && (!t.roadPath || t.roadPath.length === 0)) {
+            return { ...t, roadPath: fetched.roadPath, pathIndex: 0 }
+          }
+          return t
+        })
+      }))
+    }).catch(() => {})
 
     const metrics = calc(fill, moved, plans)
     const historyItem = {
@@ -193,6 +208,7 @@ export const useTwin = create<State>((set, get) => ({
       history: [...s.history, historyItem].slice(-24)
     })
   },
+
 
   seekTime: (targetTime: number) => {
     const s = get()
